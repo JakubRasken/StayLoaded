@@ -11,10 +11,10 @@ Every milestone is committed and pushed only after its checks pass.
 
 ## M2: Session Core
 
-- Define explicit session transitions and failure reasons.
-- Add atomic JSON persistence with schema versioning and backup recovery.
-- Implement timeout policy and restart-time accounting.
-- Add exhaustive unit and property tests for state transitions.
+- [x] Define explicit session transitions and failure reasons.
+- [x] Add atomic JSON persistence with schema versioning and backup recovery.
+- [x] Implement timeout policy and restart-time accounting.
+- [x] Add unit tests for state transitions and persistence recovery.
 
 ## M3: Fake Player Prototype
 

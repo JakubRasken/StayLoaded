@@ -14,7 +14,7 @@ class StayLoadedSessionTest {
 
     @Test
     void reportsRemainingTimeWithoutGoingNegative() {
-        StayLoadedSession session = session(SessionStatus.ACTIVE);
+        StayLoadedSession session = activeSession();
 
         assertEquals(Duration.ofMinutes(45), session.remainingAt(START.plus(Duration.ofMinutes(15))));
         assertEquals(Duration.ZERO, session.remainingAt(START.plus(Duration.ofHours(2))));
@@ -22,8 +22,12 @@ class StayLoadedSessionTest {
 
     @Test
     void identifiesTerminalStates() {
-        assertTrue(session(SessionStatus.EXPIRED).isTerminal());
-        assertTrue(session(SessionStatus.TERMINATED).isTerminal());
+        assertTrue(SessionMachine.expire(activeSession(), START.plus(Duration.ofHours(1))).isTerminal());
+        assertTrue(SessionMachine.terminate(
+                activeSession(),
+                SessionOutcome.ADMIN_TERMINATED,
+                START.plus(Duration.ofMinutes(1))
+        ).isTerminal());
     }
 
     @Test
@@ -33,8 +37,11 @@ class StayLoadedSessionTest {
                 "Builder",
                 START,
                 START.minusSeconds(1),
+                START,
+                0,
                 SessionStatus.STARTING,
-                ""
+                "",
+                SessionOutcome.NONE
         ));
     }
 
@@ -44,8 +51,15 @@ class StayLoadedSessionTest {
                 "Builder",
                 START,
                 START.plus(Duration.ofHours(1)),
+                START,
+                0,
                 status,
-                "Testing"
+                "Testing",
+                SessionOutcome.NONE
         );
+    }
+
+    private StayLoadedSession activeSession() {
+        return SessionMachine.activate(session(SessionStatus.STARTING), START);
     }
 }

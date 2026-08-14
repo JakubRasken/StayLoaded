@@ -29,11 +29,11 @@ Adding a version should require:
 ## Safety Invariants
 
 - At most one live server player may own a player's UUID.
-- The durable session record is written before disconnecting the client.
+- The session record is forced and atomically renamed before disconnecting the client.
 - All world and player-list mutations run on the server thread.
 - A returning real player wins every identity conflict.
 - Ambiguous restoration terminates the stand-in instead of risking inventory overwrite.
-- Session transitions are idempotent and crash recovery is journal-based.
+- Session transitions are idempotent and crash recovery uses atomic primary, temporary, and backup generations.
 - No fake connection is exposed to code until its required listener and channel are initialized.
 
 ## Required Integration Matrix
