@@ -1,0 +1,8 @@
+name: StayLoaded
+version: '${version}'
+main: io.github.jakubrasken.stayloaded.paper.StayLoadedPlugin
+description: Log off. Stay loaded.
+author: JakubRasken
+website: https://github.com/JakubRasken/StayLoaded
+api-version: '1.21.11'
+folia-supported: false
