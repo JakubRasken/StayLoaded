@@ -18,10 +18,10 @@ Every milestone is committed and pushed only after its checks pass.
 
 ## M3: Fake Player Prototype
 
-- Build synthetic connection and packet listener in both adapters.
-- Spawn and remove a test-profile stand-in on the main thread.
+- [x] Build synthetic connection and packet listener in both adapters.
+- [x] Spawn and remove a random test-profile stand-in on the main thread.
 - Prove that simulation, mob spawning, redstone, and farms treat it as a player.
-- Add unsupported-build rejection and diagnostic output.
+- [x] Add unsupported-build rejection and diagnostic output.
 
 ## M4: Safe Player Handoff
 

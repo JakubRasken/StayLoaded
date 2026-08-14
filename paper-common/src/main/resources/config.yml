@@ -1,0 +1,2 @@
+# Unsafe development facility. This does not hand off a real player's identity.
+debug-probes-enabled: false

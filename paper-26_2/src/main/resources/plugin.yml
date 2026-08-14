@@ -6,3 +6,12 @@ author: JakubRasken
 website: https://github.com/JakubRasken/StayLoaded
 api-version: '26.2'
 folia-supported: false
+commands:
+  stayloaded-debug:
+    description: Manages development-only synthetic player probes.
+    usage: /<command> probe <spawn [world x y z]|remove <uuid>|count|clear>
+    permission: stayloaded.admin.debug
+permissions:
+  stayloaded.admin.debug:
+    description: Allows unsafe StayLoaded development probes.
+    default: op

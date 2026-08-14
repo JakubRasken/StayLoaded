@@ -6,7 +6,7 @@ StayLoaded is an in-development Paper plugin that will let a player disconnect w
 
 ## Status
 
-StayLoaded is pre-alpha. The current milestone establishes the versioned architecture and build pipeline; it does **not** create fake players yet and must not be installed on a production server.
+StayLoaded is pre-alpha. It can create development-only, random-identity synthetic player probes, but it does **not** hand off a real player yet and must not be installed on a production server.
 
 The first supported lines are:
 
@@ -50,6 +50,8 @@ Version-specific artifacts are written under each adapter's `build/libs` directo
 - `paper-26_2`: NMS implementation and packaging for `26.2`
 
 See [Architecture](docs/ARCHITECTURE.md), [Roadmap](docs/ROADMAP.md), and [Launch Plan](docs/LAUNCH.md).
+
+The opt-in probe facility is documented in [Debug Probes](docs/DEBUG_PROBES.md). It exists only to validate NMS behavior on disposable test servers.
 
 ## License
 
