@@ -44,6 +44,27 @@ class SessionMachineTest {
     }
 
     @Test
+    void checkpointKeepsStatusAndRecordsCheckpointedAt() {
+        StayLoadedSession active = SessionMachine.activate(
+                SessionMachine.create(
+                        UUID.randomUUID(), "Builder", START, Duration.ofHours(2), "Iron farm"
+                ),
+                START.plusSeconds(10)
+        );
+
+        StayLoadedSession checkpointed = SessionMachine.checkpoint(active, START.plusSeconds(60));
+
+        assertEquals(SessionStatus.ACTIVE, checkpointed.status());
+        assertEquals(active.revision() + 1, checkpointed.revision());
+        assertEquals(START.plusSeconds(60), checkpointed.checkpointedAt());
+        assertEquals(START.plusSeconds(60), checkpointed.updatedAt());
+        assertThrows(
+                IllegalStateException.class,
+                () -> SessionMachine.checkpoint(SessionMachine.beginReturn(active, START.plusSeconds(61)), START.plusSeconds(62))
+        );
+    }
+
+    @Test
     void rejectsSkippedTransitionsAndMakesRetriesIdempotent() {
         StayLoadedSession starting = SessionMachine.create(
                 UUID.randomUUID(), "Builder", START, Duration.ofHours(2), ""

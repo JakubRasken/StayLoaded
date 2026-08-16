@@ -14,7 +14,8 @@ public record StayLoadedSession(
         long revision,
         SessionStatus status,
         String note,
-        SessionOutcome outcome
+        SessionOutcome outcome,
+        Instant checkpointedAt
 ) {
     public StayLoadedSession {
         Objects.requireNonNull(playerId, "playerId");
@@ -34,6 +35,9 @@ public record StayLoadedSession(
         }
         if (updatedAt.isBefore(startedAt)) {
             throw new IllegalArgumentException("updatedAt must not be before startedAt");
+        }
+        if (checkpointedAt != null && checkpointedAt.isBefore(startedAt)) {
+            throw new IllegalArgumentException("checkpointedAt must not be before startedAt");
         }
         if (revision < 0) {
             throw new IllegalArgumentException("revision must not be negative");

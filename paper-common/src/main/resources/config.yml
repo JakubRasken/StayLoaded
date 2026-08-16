@@ -7,3 +7,7 @@ experimental-handoff:
   allow-insecure-offline-mode: false
   default-duration-seconds: 300
   max-duration-seconds: 3600
+  # How often (seconds) an active stand-in's player data is written to disk.
+  # 0 disables periodic checkpointing. Lower values narrow the crash window
+  # but increase disk writes per stand-in.
+  checkpoint-interval-seconds: 60

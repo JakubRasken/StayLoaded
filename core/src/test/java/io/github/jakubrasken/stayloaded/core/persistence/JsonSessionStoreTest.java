@@ -94,6 +94,46 @@ class JsonSessionStoreTest {
         )));
     }
 
+    @Test
+    void roundTripsCheckpointedAt() throws IOException {
+        JsonSessionStore store = store();
+        StayLoadedSession active = session("00000000-0000-0000-0000-000000000001", "Builder");
+        StayLoadedSession checkpointed = SessionMachine.checkpoint(active, START.plusSeconds(30));
+
+        store.save(List.of(checkpointed));
+        SessionLoadResult result = store.load();
+
+        assertEquals(List.of(checkpointed), result.sessions());
+    }
+
+    @Test
+    void readsLegacySessionsWithoutCheckpointedAt() throws IOException {
+        String legacy = """
+                {
+                  "schemaVersion": 1,
+                  "sessions": [
+                    {
+                      "playerId": "00000000-0000-0000-0000-000000000001",
+                      "playerName": "Builder",
+                      "startedAt": "2026-08-13T12:00:00Z",
+                      "expiresAt": "2026-08-13T13:00:00Z",
+                      "updatedAt": "2026-08-13T12:00:01Z",
+                      "revision": 1,
+                      "status": "ACTIVE",
+                      "note": "Testing",
+                      "outcome": "NONE"
+                    }
+                  ]
+                }
+                """;
+        Files.writeString(dataFile(), legacy, StandardCharsets.UTF_8);
+
+        SessionLoadResult result = store().load();
+
+        assertEquals(1, result.sessions().size());
+        assertEquals(null, result.sessions().get(0).checkpointedAt());
+    }
+
     private JsonSessionStore store() {
         return new JsonSessionStore(dataFile());
     }

@@ -34,15 +34,24 @@ public final class StayLoadedCoordinator implements Listener, AutoCloseable {
     private final Map<UUID, StayLoadedSession> sessions = new HashMap<>();
     private final Set<UUID> armedPlayers = new HashSet<>();
     private final Map<UUID, PlayerSnapshot> pendingSnapshots = new HashMap<>();
+    private final long checkpointIntervalTicks;
+    private long lastCheckpointTick;
     private boolean acceptingSessions = true;
 
     public StayLoadedCoordinator(JavaPlugin plugin, PlatformAdapter platformAdapter) throws IOException {
         this.plugin = plugin;
         this.platformAdapter = platformAdapter;
         this.sessionStore = new JsonSessionStore(plugin.getDataFolder().toPath().resolve("sessions.json"));
+        long checkpointIntervalSeconds = plugin.getConfig().getLong(
+                "experimental-handoff.checkpoint-interval-seconds",
+                60L
+        );
+        this.checkpointIntervalTicks = checkpointIntervalSeconds > 0
+                ? Math.max(20L, checkpointIntervalSeconds * 20L)
+                : 0L;
         loadAndReconcile();
         Bukkit.getPluginManager().registerEvents(this, plugin);
-        Bukkit.getScheduler().runTaskTimer(plugin, this::expireSessions, 20L, 20L);
+        Bukkit.getScheduler().runTaskTimer(plugin, this::tickSessions, 20L, 20L);
     }
 
     public void start(Player player, Duration duration, String note) throws IOException {
@@ -196,6 +205,50 @@ public final class StayLoadedCoordinator implements Listener, AutoCloseable {
             } catch (IOException persistenceFailure) {
                 exception.addSuppressed(persistenceFailure);
                 acceptingSessions = false;
+            }
+        }
+    }
+
+    private void tickSessions() {
+        expireSessions();
+        if (checkpointIntervalTicks == 0L) {
+            return;
+        }
+        long currentTick = Bukkit.getCurrentTick();
+        if (currentTick - lastCheckpointTick < checkpointIntervalTicks) {
+            return;
+        }
+        lastCheckpointTick = currentTick;
+        checkpointSessions();
+    }
+
+    private void checkpointSessions() {
+        Instant now = Instant.now();
+        for (StayLoadedSession session : Set.copyOf(sessions.values())) {
+            if (session.status() != SessionStatus.ACTIVE || !platformAdapter.hasStandIn(session.playerId())) {
+                continue;
+            }
+            if (session.checkpointedAt() != null && !session.checkpointedAt().isBefore(now.minusSeconds(
+                    checkpointIntervalTicks / 20L
+            ))) {
+                continue;
+            }
+            try {
+                platformAdapter.checkpointStandIn(session.playerId());
+                StayLoadedSession checkpointed = SessionMachine.checkpoint(session, now);
+                try {
+                    persist(checkpointed);
+                } catch (IOException persistenceFailure) {
+                    sessions.put(session.playerId(), checkpointed);
+                    acceptingSessions = false;
+                    plugin.getLogger().log(
+                            Level.SEVERE,
+                            "Stand-in data is safe, but the checkpoint could not be persisted for " + session.playerId(),
+                            persistenceFailure
+                    );
+                }
+            } catch (IOException | RuntimeException exception) {
+                plugin.getLogger().log(Level.SEVERE, "Failed to checkpoint stand-in " + session.playerId(), exception);
             }
         }
     }

@@ -25,6 +25,8 @@ public interface PlatformAdapter extends AutoCloseable {
 
     void saveAndRemoveStandIn(UUID playerId) throws IOException;
 
+    void checkpointStandIn(UUID playerId) throws IOException;
+
     boolean hasStandIn(UUID playerId);
 
     @Override

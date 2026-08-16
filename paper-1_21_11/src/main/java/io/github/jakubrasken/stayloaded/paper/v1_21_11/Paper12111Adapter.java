@@ -201,7 +201,34 @@ public final class Paper12111Adapter implements PlatformAdapter {
             throw new IllegalStateException("Cannot save a stand-in while the real player is registered");
         }
 
-        CompoundTag savedData = savePlayerData(standIn.player());
+        writeStandInData(standIn.player(), playerId);
+
+        try {
+            cleanup(standIn);
+        } finally {
+            if (standIn.player().isRemoved()) {
+                standIns.remove(playerId, standIn);
+            }
+        }
+    }
+
+    @Override
+    public void checkpointStandIn(UUID playerId) throws IOException {
+        requirePrimaryThread();
+        requireInitialized();
+        SyntheticPlayer standIn = standIns.get(playerId);
+        if (standIn == null) {
+            throw new IllegalStateException("No stand-in exists for " + playerId);
+        }
+        if (server.getPlayerList().getPlayer(playerId) != null) {
+            throw new IllegalStateException("Cannot checkpoint a stand-in while the real player is registered");
+        }
+
+        writeStandInData(standIn.player(), playerId);
+    }
+
+    private void writeStandInData(ServerPlayer standIn, UUID playerId) throws IOException {
+        CompoundTag savedData = savePlayerData(standIn);
         ByteArrayOutputStream compressedOutput = new ByteArrayOutputStream();
         NbtIo.writeCompressed(savedData, compressedOutput);
         byte[] compressedData = compressedOutput.toByteArray();
@@ -224,14 +251,6 @@ public final class Paper12111Adapter implements PlatformAdapter {
                 DurableFiles.writeAtomically(dataFile, previousData);
             }
             throw exception;
-        }
-
-        try {
-            cleanup(standIn);
-        } finally {
-            if (standIn.player().isRemoved()) {
-                standIns.remove(playerId, standIn);
-            }
         }
     }
 

@@ -40,7 +40,8 @@ public final class SessionMachine {
                 0,
                 SessionStatus.STARTING,
                 note,
-                SessionOutcome.NONE
+                SessionOutcome.NONE,
+                null
         );
     }
 
@@ -75,6 +76,27 @@ public final class SessionMachine {
             throw new IllegalArgumentException("session cannot expire before its deadline");
         }
         return transition(session, SessionStatus.EXPIRED, SessionOutcome.TIMEOUT, now);
+    }
+
+    public static StayLoadedSession checkpoint(StayLoadedSession session, Instant now) {
+        Objects.requireNonNull(session, "session");
+        Objects.requireNonNull(now, "now");
+        if (session.status() != SessionStatus.ACTIVE) {
+            throw new IllegalStateException("Only active sessions can be checkpointed");
+        }
+        Instant checkpointTime = now.isBefore(session.updatedAt()) ? session.updatedAt() : now;
+        return new StayLoadedSession(
+                session.playerId(),
+                session.playerName(),
+                session.startedAt(),
+                session.expiresAt(),
+                checkpointTime,
+                session.revision() + 1,
+                session.status(),
+                session.note(),
+                session.outcome(),
+                checkpointTime
+        );
     }
 
     public static StayLoadedSession terminate(
@@ -120,7 +142,8 @@ public final class SessionMachine {
                 session.revision() + 1,
                 target,
                 session.note(),
-                outcome
+                outcome,
+                session.checkpointedAt()
         );
     }
 }

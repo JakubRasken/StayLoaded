@@ -152,7 +152,8 @@ public final class JsonSessionStore {
             long revision,
             String status,
             String note,
-            String outcome
+            String outcome,
+            String checkpointedAt
     ) {
         private static PersistedSession fromSession(StayLoadedSession session) {
             return new PersistedSession(
@@ -164,7 +165,8 @@ public final class JsonSessionStore {
                     session.revision(),
                     session.status().name(),
                     session.note(),
-                    session.outcome().name()
+                    session.outcome().name(),
+                    session.checkpointedAt() == null ? null : session.checkpointedAt().toString()
             );
         }
 
@@ -178,7 +180,8 @@ public final class JsonSessionStore {
                     revision,
                     SessionStatus.valueOf(status),
                     note,
-                    SessionOutcome.valueOf(outcome)
+                    SessionOutcome.valueOf(outcome),
+                    checkpointedAt == null ? null : Instant.parse(checkpointedAt)
             );
         }
     }

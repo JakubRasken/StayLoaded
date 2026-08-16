@@ -21,9 +21,20 @@ When enabled, `/stayloaded [duration] [reason]` disconnects the player, waits fo
 - Returning login is denied when checked save or world removal cannot complete.
 - Offline-mode handoff requires a separate explicit acknowledgement.
 
+## Checkpointing
+
+Active stand-ins write their player data back to disk every
+`checkpoint-interval-seconds` (default 60, `0` disables). Each write reuses the
+same atomic-replacement, `.dat_old` backup, and compressed read-back as a
+final save, so the interval only narrows the window between world autosave and
+player-data save after a process crash. The session record stores the last
+checkpoint time so recovery can see how fresh the stand-in's data is.
+
 ## Blocking Limitations
 
-- Active stand-ins are not checkpointed periodically. A process crash can duplicate or lose items across separately autosaved world/player state.
+- Periodic checkpointing narrows, but does not close, the crash window: a
+  process crash can still duplicate or lose items between world autosave and
+  the most recent player-data checkpoint.
 - Stats and advancements are not preserved completely.
 - Restart restoration is intentionally disabled.
 - World-only players are absent from the tab list, Bukkit online-player collection, permissions integrations, and many plugin assumptions.
