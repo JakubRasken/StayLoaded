@@ -9,7 +9,8 @@ folia-supported: false
 commands:
   stayloaded:
     description: Disconnects and leaves an experimental server-side stand-in.
-    usage: /<command> [30s|10m|1h] [reason] | /<command> terminate|list|info|reload|metrics
+    usage: /<command> [duration] [reason] | /<command> help|start|stop|stopall|status|list|reload|metrics
+    aliases: [sl]
     permission: stayloaded.use
   stayloaded-debug:
     description: Manages development-only synthetic player probes.

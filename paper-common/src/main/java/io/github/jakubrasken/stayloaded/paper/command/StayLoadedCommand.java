@@ -47,40 +47,61 @@ public final class StayLoadedCommand implements CommandExecutor, TabCompleter {
             @NotNull String label,
             @NotNull String[] arguments
     ) {
-        if (arguments.length > 0) {
-            switch (arguments[0].toLowerCase(Locale.ROOT)) {
-                case "terminate" -> {
-                    return terminate(sender, arguments);
+        if (arguments.length == 0) {
+            return help(sender);
+        }
+        switch (arguments[0].toLowerCase(Locale.ROOT)) {
+            case "help" -> {
+                return help(sender);
+            }
+            case "start" -> {
+                return start(sender, Arrays.copyOfRange(arguments, 1, arguments.length));
+            }
+            case "stop", "terminate" -> {
+                return stop(sender, arguments);
+            }
+            case "stopall", "terminateall" -> {
+                return stopAll(sender);
+            }
+            case "status", "info" -> {
+                return status(sender, arguments);
+            }
+            case "list" -> {
+                if (!sender.hasPermission("stayloaded.admin.list")) {
+                    return noPermission(sender);
                 }
-                case "list" -> {
-                    if (!sender.hasPermission("stayloaded.admin.list")) {
-                        return noPermission(sender);
-                    }
-                    return list(sender);
+                return list(sender);
+            }
+            case "reload" -> {
+                if (!sender.hasPermission("stayloaded.admin.reload")) {
+                    return noPermission(sender);
                 }
-                case "info" -> {
-                    if (!sender.hasPermission("stayloaded.admin.list")) {
-                        return noPermission(sender);
-                    }
-                    return info(sender, arguments);
+                return reload(sender);
+            }
+            case "metrics" -> {
+                if (!sender.hasPermission("stayloaded.admin.metrics")) {
+                    return noPermission(sender);
                 }
-                case "reload" -> {
-                    if (!sender.hasPermission("stayloaded.admin.reload")) {
-                        return noPermission(sender);
-                    }
-                    return reload(sender);
-                }
-                case "metrics" -> {
-                    if (!sender.hasPermission("stayloaded.admin.metrics")) {
-                        return noPermission(sender);
-                    }
-                    return metrics(sender);
-                }
-                default -> {
-                }
+                return metrics(sender);
+            }
+            default -> {
+                return start(sender, arguments);
             }
         }
-        return start(sender, arguments);
+    }
+
+    private boolean help(CommandSender sender) {
+        messages.send(sender, "help-header", Map.of());
+        messages.send(sender, "help-what", Map.of());
+        messages.send(sender, "help-usage", Map.of());
+        messages.send(sender, "help-usage-detail", Map.of(
+                "default", Messages.formatDuration(Duration.ofSeconds(defaultDurationSeconds))
+        ));
+        messages.send(sender, "help-example", Map.of());
+        messages.send(sender, "help-commands", Map.of());
+        messages.send(sender, "help-return", Map.of());
+        messages.send(sender, "help-warning", Map.of());
+        return true;
     }
 
     private boolean noPermission(CommandSender sender) {
@@ -111,32 +132,61 @@ public final class StayLoadedCommand implements CommandExecutor, TabCompleter {
         return true;
     }
 
-    private boolean terminate(CommandSender sender, String[] arguments) {
-        if (!sender.hasPermission("stayloaded.terminate")) {
+    private boolean stop(CommandSender sender, String[] arguments) {
+        String target;
+        if (arguments.length >= 2) {
+            target = arguments[1];
+        } else if (sender instanceof Player player) {
+            target = player.getName();
+        } else {
+            messages.send(sender, "stop-usage", Map.of());
+            return true;
+        }
+        final String resolvedTarget = target;
+
+        boolean selfStop = sender instanceof Player player && player.getName().equalsIgnoreCase(target);
+        if (!selfStop && !sender.hasPermission("stayloaded.terminate")) {
             messages.send(sender, "terminate-permission", Map.of());
             return true;
         }
-        if (arguments.length < 2) {
-            messages.send(sender, "terminate-usage", Map.of());
-            return true;
-        }
-        String target = arguments[1];
+
         UUID playerId;
         try {
-            playerId = UUID.fromString(target);
+            playerId = UUID.fromString(resolvedTarget);
         } catch (IllegalArgumentException exception) {
-            Player player = Bukkit.getPlayerExact(target);
-            if (player == null) {
-                messages.send(sender, "terminate-unknown-player", Map.of("player", target));
-                return true;
+            playerId = coordinator.sessionsSnapshot().stream()
+                    .filter(session -> !session.isTerminal() && session.playerName().equalsIgnoreCase(resolvedTarget))
+                    .map(StayLoadedSession::playerId)
+                    .findFirst()
+                    .orElse(null);
+            if (playerId == null) {
+                Player player = Bukkit.getPlayerExact(resolvedTarget);
+                if (player == null) {
+                    messages.send(sender, "terminate-unknown-player", Map.of("player", resolvedTarget));
+                    return true;
+                }
+                playerId = player.getUniqueId();
             }
-            playerId = player.getUniqueId();
         }
 
         try {
             coordinator.terminateForAdmin(playerId);
-            messages.send(sender, "terminate-done", Map.of("player", target));
+            messages.send(sender, "terminate-done", Map.of("player", resolvedTarget));
         } catch (IOException | IllegalStateException exception) {
+            messages.send(sender, "terminate-failed", Map.of("error", String.valueOf(exception.getMessage())));
+        }
+        return true;
+    }
+
+    private boolean stopAll(CommandSender sender) {
+        if (!sender.hasPermission("stayloaded.terminate")) {
+            messages.send(sender, "terminate-permission", Map.of());
+            return true;
+        }
+        try {
+            int terminated = coordinator.terminateAllForAdmin();
+            messages.send(sender, "stopall-done", Map.of("count", Integer.toString(terminated)));
+        } catch (IOException exception) {
             messages.send(sender, "terminate-failed", Map.of("error", String.valueOf(exception.getMessage())));
         }
         return true;
@@ -162,25 +212,54 @@ public final class StayLoadedCommand implements CommandExecutor, TabCompleter {
         return true;
     }
 
-    private boolean info(CommandSender sender, String[] arguments) {
-        if (arguments.length < 2) {
+    private boolean status(CommandSender sender, String[] arguments) {
+        String target;
+        if (arguments.length >= 2) {
+            target = arguments[1];
+        } else if (sender instanceof Player player) {
+            target = player.getName();
+        } else {
             messages.send(sender, "terminate-usage", Map.of());
             return true;
         }
-        String target = arguments[1];
-        UUID playerId = resolvePlayerId(target);
-        Optional<StayLoadedSession> session = playerId == null ? Optional.empty() : coordinator.sessionFor(playerId);
-        if (session.isEmpty() || session.get().isTerminal()) {
-            messages.send(sender, "info-none", Map.of("player", target));
+        final String resolvedTarget = target;
+
+        boolean selfStatus = sender instanceof Player player && player.getName().equalsIgnoreCase(target);
+        if (!selfStatus && !sender.hasPermission("stayloaded.admin.list")) {
+            return noPermission(sender);
+        }
+
+        Optional<StayLoadedSession> session = coordinator.sessionsSnapshot().stream()
+                .filter(candidate -> !candidate.isTerminal())
+                .filter(candidate -> candidate.playerName().equalsIgnoreCase(resolvedTarget)
+                        || candidate.playerId().toString().equalsIgnoreCase(resolvedTarget))
+                .findFirst();
+        if (session.isEmpty()) {
+            if (selfStatus) {
+                messages.send(sender, "status-none", Map.of());
+            } else {
+                messages.send(sender, "info-none", Map.of("player", resolvedTarget));
+            }
             return true;
         }
         StayLoadedSession value = session.get();
-        messages.send(sender, "info-header", Map.of("player", value.playerName()));
-        messages.send(sender, "info-status", Map.of("status", Messages.capitalize(value.status().name())));
-        messages.send(sender, "info-started", Map.of("started", value.startedAt().toString()));
-        messages.send(sender, "info-expires", Map.of("expires", value.expiresAt().toString()));
-        messages.send(sender, "info-note", Map.of("note", value.note().isEmpty() ? "-" : value.note()));
-        messages.send(sender, "info-respawns", Map.of("respawns", Integer.toString(value.respawnCount())));
+        if (selfStatus) {
+            messages.send(sender, "status-header", Map.of());
+            messages.send(sender, "status-remaining", Map.of(
+                    "remaining", Messages.formatDuration(value.remainingAt(java.time.Instant.now()))
+            ));
+            messages.send(sender, "status-expires", Map.of("expires", value.expiresAt().toString()));
+            if (!value.note().isEmpty()) {
+                messages.send(sender, "status-note", Map.of("note", value.note()));
+            }
+        } else {
+            messages.send(sender, "info-header", Map.of("player", value.playerName()));
+            messages.send(sender, "info-status", Map.of("status", Messages.capitalize(value.status().name())));
+            messages.send(sender, "info-started", Map.of("started", value.startedAt().toString()));
+            messages.send(sender, "info-expires", Map.of("expires", value.expiresAt().toString()));
+            messages.send(sender, "info-note", Map.of("note", value.note().isEmpty() ? "-" : value.note()));
+            messages.send(sender, "info-respawns", Map.of("respawns", Integer.toString(value.respawnCount())));
+        }
         return true;
     }
 
@@ -208,19 +287,21 @@ public final class StayLoadedCommand implements CommandExecutor, TabCompleter {
         counts.entrySet().stream()
                 .sorted(Map.Entry.comparingByKey())
                 .forEach(entry -> messages.send(sender, "metrics-entry", Map.of(
-                        "name", entry.getKey(),
+                        "name", friendlyMetricName(entry.getKey()),
                         "count", Long.toString(entry.getValue())
                 )));
         return true;
     }
 
-    private UUID resolvePlayerId(String target) {
-        try {
-            return UUID.fromString(target);
-        } catch (IllegalArgumentException exception) {
-            Player player = Bukkit.getPlayerExact(target);
-            return player == null ? null : player.getUniqueId();
-        }
+    private static String friendlyMetricName(String key) {
+        return switch (key) {
+            case "session_started" -> "Sessions started";
+            case "player_returned" -> "Players returned";
+            case "session_expired" -> "Sessions expired";
+            case "session_died" -> "Stand-ins died";
+            case "admin_terminated" -> "Admin terminations";
+            default -> key.replace('_', ' ');
+        };
     }
 
     @Override
@@ -232,18 +313,18 @@ public final class StayLoadedCommand implements CommandExecutor, TabCompleter {
     ) {
         List<String> suggestions = new ArrayList<>();
         if (arguments.length == 1) {
-            suggestions.addAll(List.of("terminate", "list", "info", "reload", "metrics"));
-        } else if (arguments.length == 2 && "terminate".equalsIgnoreCase(arguments[0])) {
-            if (sender.hasPermission("stayloaded.terminate")) {
-                for (Player player : Bukkit.getOnlinePlayers()) {
-                    if (coordinator.sessionFor(player.getUniqueId()).map(s -> !s.isTerminal()).orElse(false)) {
-                        suggestions.add(player.getName());
+            suggestions.addAll(List.of("help", "start", "stop", "stopall", "status", "list", "reload", "metrics"));
+        } else if (arguments.length == 2 && ("stop".equalsIgnoreCase(arguments[0])
+                || "terminate".equalsIgnoreCase(arguments[0])
+                || "status".equalsIgnoreCase(arguments[0])
+                || "info".equalsIgnoreCase(arguments[0]))) {
+            boolean forStop = "stop".equalsIgnoreCase(arguments[0]) || "terminate".equalsIgnoreCase(arguments[0]);
+            if (!forStop || sender.hasPermission("stayloaded.terminate")) {
+                for (StayLoadedSession session : coordinator.sessionsSnapshot()) {
+                    if (!session.isTerminal()) {
+                        suggestions.add(session.playerName());
                     }
                 }
-            }
-        } else if (arguments.length == 2 && "info".equalsIgnoreCase(arguments[0])) {
-            for (Player player : Bukkit.getOnlinePlayers()) {
-                suggestions.add(player.getName());
             }
         }
         String prefix = arguments[arguments.length - 1].toLowerCase(Locale.ROOT);

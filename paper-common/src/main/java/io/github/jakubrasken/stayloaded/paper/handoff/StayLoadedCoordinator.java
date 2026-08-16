@@ -351,6 +351,43 @@ public final class StayLoadedCoordinator implements Listener, AutoCloseable {
         broadcastSessionEnd(session.playerName(), "terminated by an operator");
     }
 
+    public int terminateAllForAdmin() throws IOException {
+        requirePrimaryThread();
+        int terminated = 0;
+        List<StayLoadedSession> active = sessions.values().stream()
+                .filter(session -> !session.isTerminal())
+                .toList();
+        for (StayLoadedSession session : active) {
+            try {
+                if (platformAdapter.hasStandIn(session.playerId())) {
+                    platformAdapter.saveAndRemoveStandIn(session.playerId());
+                }
+                StayLoadedSession done = SessionMachine.terminate(
+                        session,
+                        SessionOutcome.ADMIN_TERMINATED,
+                        Instant.now()
+                );
+                try {
+                    persist(done);
+                } catch (IOException persistenceFailure) {
+                    sessions.put(session.playerId(), done);
+                    acceptingSessions = false;
+                    throw persistenceFailure;
+                }
+                metricsRecorder.record("admin_terminated");
+                broadcastSessionEnd(session.playerName(), "terminated by an operator");
+                terminated++;
+            } catch (IOException | RuntimeException exception) {
+                plugin.getLogger().log(
+                        Level.SEVERE,
+                        "Failed to terminate session for " + session.playerName(),
+                        exception
+                );
+            }
+        }
+        return terminated;
+    }
+
     private void activateStandIn(UUID playerId) {
         PlayerSnapshot snapshot = pendingSnapshots.remove(playerId);
         StayLoadedSession session = sessions.get(playerId);
