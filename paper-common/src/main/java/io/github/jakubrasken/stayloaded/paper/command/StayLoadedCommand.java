@@ -5,6 +5,8 @@ import java.io.IOException;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.Locale;
+import java.util.UUID;
+import org.bukkit.Bukkit;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
@@ -33,6 +35,13 @@ public final class StayLoadedCommand implements CommandExecutor {
             @NotNull String label,
             @NotNull String[] arguments
     ) {
+        if (arguments.length > 0 && arguments[0].equalsIgnoreCase("terminate")) {
+            return terminate(sender, arguments);
+        }
+        return start(sender, arguments);
+    }
+
+    private boolean start(CommandSender sender, String[] arguments) {
         if (!(sender instanceof Player player)) {
             sender.sendMessage("Only a player can start a StayLoaded session.");
             return true;
@@ -51,6 +60,37 @@ public final class StayLoadedCommand implements CommandExecutor {
             sender.sendMessage("Use a duration such as 30s, 10m, or 1h.");
         } catch (IOException | IllegalStateException exception) {
             sender.sendMessage("StayLoaded could not start safely: " + exception.getMessage());
+        }
+        return true;
+    }
+
+    private boolean terminate(CommandSender sender, String[] arguments) {
+        if (!sender.hasPermission("stayloaded.terminate")) {
+            sender.sendMessage("You do not have permission to terminate StayLoaded sessions.");
+            return true;
+        }
+        if (arguments.length < 2) {
+            sender.sendMessage("Usage: /stayloaded terminate <player>");
+            return true;
+        }
+        String target = arguments[1];
+        UUID playerId;
+        try {
+            playerId = UUID.fromString(target);
+        } catch (IllegalArgumentException exception) {
+            Player player = Bukkit.getPlayerExact(target);
+            if (player == null) {
+                sender.sendMessage("No player named '" + target + "' is online.");
+                return true;
+            }
+            playerId = player.getUniqueId();
+        }
+
+        try {
+            coordinator.terminateForAdmin(playerId);
+            sender.sendMessage("Terminated the StayLoaded session for " + target + ".");
+        } catch (IOException | IllegalStateException exception) {
+            sender.sendMessage("StayLoaded could not terminate safely: " + exception.getMessage());
         }
         return true;
     }

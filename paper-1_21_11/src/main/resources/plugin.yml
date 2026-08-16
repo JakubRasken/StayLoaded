@@ -9,7 +9,7 @@ folia-supported: false
 commands:
   stayloaded:
     description: Disconnects and leaves an experimental server-side stand-in.
-    usage: /<command> [30s|10m|1h] [reason]
+    usage: /<command> [30s|10m|1h] [reason] | /<command> terminate <player>
     permission: stayloaded.use
   stayloaded-debug:
     description: Manages development-only synthetic player probes.
@@ -19,6 +19,11 @@ permissions:
   stayloaded.use:
     description: Allows experimental StayLoaded player handoff.
     default: op
+  stayloaded.terminate:
+    description: Allows terminating another player's StayLoaded session.
+    default: op
+    children:
+      stayloaded.use: true
   stayloaded.admin.debug:
     description: Allows unsafe StayLoaded development probes.
     default: op

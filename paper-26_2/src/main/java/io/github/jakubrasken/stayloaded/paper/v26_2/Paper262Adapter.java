@@ -260,6 +260,27 @@ public final class Paper262Adapter implements PlatformAdapter {
         standIns.put(playerId, standIn);
     }
 
+    @Override
+    public void removeStandIn(UUID playerId) throws IOException {
+        requirePrimaryThread();
+        requireInitialized();
+        SyntheticPlayer standIn = standIns.get(playerId);
+        if (standIn == null) {
+            throw new IllegalStateException("No stand-in exists for " + playerId);
+        }
+        if (server.getPlayerList().getPlayer(playerId) != null) {
+            throw new IllegalStateException("Cannot remove a stand-in while the real player is registered");
+        }
+
+        try {
+            cleanup(standIn);
+        } finally {
+            if (standIn.player().isRemoved()) {
+                standIns.remove(playerId, standIn);
+            }
+        }
+    }
+
     private void writeStandInData(ServerPlayer standIn, UUID playerId) throws IOException {
         CompoundTag data = serialize(standIn);
         ByteArrayOutputStream output = new ByteArrayOutputStream();

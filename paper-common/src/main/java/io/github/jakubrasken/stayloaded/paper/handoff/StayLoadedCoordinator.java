@@ -26,6 +26,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
+import org.bukkit.event.entity.EntityDeathEvent;
 import org.bukkit.event.player.PlayerPreLoginEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -99,6 +100,35 @@ public final class StayLoadedCoordinator implements Listener, AutoCloseable {
         Bukkit.getScheduler().runTaskLater(plugin, () -> failCancelledKick(player.getUniqueId()), 10L);
     }
 
+    @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = false)
+    public void onStandInDeath(EntityDeathEvent event) {
+        if (!(event.getEntity() instanceof Player player)) {
+            return;
+        }
+        UUID playerId = player.getUniqueId();
+        StayLoadedSession session = sessions.get(playerId);
+        if (session == null || session.status() != SessionStatus.ACTIVE || !platformAdapter.hasStandIn(playerId)) {
+            return;
+        }
+
+        event.setCancelled(true);
+        event.setDroppedExp(0);
+        event.getDrops().clear();
+        try {
+            platformAdapter.removeStandIn(playerId);
+            persist(SessionMachine.terminate(session, SessionOutcome.PLAYER_DIED, Instant.now()));
+            plugin.getLogger().warning(
+                    "Stand-in for " + session.playerName() + " died; ended its session with the last checkpoint intact"
+            );
+        } catch (IOException | RuntimeException exception) {
+            plugin.getLogger().log(
+                    Level.SEVERE,
+                    "Failed to safely end the session after the stand-in for " + session.playerName() + " died",
+                    exception
+            );
+        }
+    }
+
     @EventHandler(priority = EventPriority.MONITOR)
     public void onPlayerQuit(PlayerQuitEvent event) {
         UUID playerId = event.getPlayer().getUniqueId();
@@ -168,6 +198,25 @@ public final class StayLoadedCoordinator implements Listener, AutoCloseable {
                 }
             }
             disallow(event, "StayLoaded could not safely save your stand-in. Try again shortly.", exception);
+        }
+    }
+
+    public void terminateForAdmin(UUID playerId) throws IOException {
+        requirePrimaryThread();
+        StayLoadedSession session = sessions.get(playerId);
+        if (session == null || session.isTerminal()) {
+            throw new IllegalStateException("No active StayLoaded session exists for that player");
+        }
+        if (platformAdapter.hasStandIn(playerId)) {
+            platformAdapter.saveAndRemoveStandIn(playerId);
+        }
+        StayLoadedSession terminated = SessionMachine.terminate(session, SessionOutcome.ADMIN_TERMINATED, Instant.now());
+        try {
+            persist(terminated);
+        } catch (IOException persistenceFailure) {
+            sessions.put(playerId, terminated);
+            acceptingSessions = false;
+            throw persistenceFailure;
         }
     }
 

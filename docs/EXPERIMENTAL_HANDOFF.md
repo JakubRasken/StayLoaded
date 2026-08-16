@@ -12,7 +12,7 @@ experimental-handoff:
   restore-after-restart: false
 ```
 
-When enabled, `/stayloaded [duration] [reason]` disconnects the player, waits for Paper's authoritative quit save, then loads that player data into a world-only synthetic `ServerPlayer`. A synchronous pre-login listener writes and verifies the stand-in's NBT before Paper reads the returning player's file.
+When enabled, `/stayloaded [duration] [reason]` disconnects the player, waits for Paper's authoritative quit save, then loads that player data into a world-only synthetic `ServerPlayer`. A synchronous pre-login listener writes and verifies the stand-in's NBT before Paper reads the returning player's file. An operator with `stayloaded.terminate` can end a session early with `/stayloaded terminate <player>`; that saves the stand-in's current data and marks the session `ADMIN_TERMINATED`.
 
 ## Current Safety Work
 
@@ -22,6 +22,7 @@ When enabled, `/stayloaded [duration] [reason]` disconnects the player, waits fo
 - Player NBT writes use atomic replacement, a validated `.dat_old`, and compressed-NBT readback.
 - Returning login is denied when checked save or world removal cannot complete.
 - Offline-mode handoff requires a separate explicit acknowledgement.
+- A stand-in that would die (void, mobs, lava, suffocation, damage) is instead removed without saving and its session is ended `PLAYER_DIED`, so the last checkpoint stays authoritative and the player does not come back dead or with dropped items.
 
 ## Checkpointing and Restart Restoration
 
@@ -51,7 +52,7 @@ shutdown leaves only terminal sessions in the store, so nothing is restored.
   chunks) is never recreated.
 - Stats and advancements are not preserved completely.
 - World-only players are absent from the tab list, Bukkit online-player collection, permissions integrations, and many plugin assumptions.
-- Death, respawn, portals, vehicles, sleep, open containers, and ender-pearl ownership are not supported.
+- Death ends the session (see above); respawn is not offered to a stand-in, and portals, vehicles, sleep, open containers, and ender-pearl ownership are not supported.
 - Synchronous pre-login persistence can stall the server on a failing filesystem.
 - No real-client fault-injection matrix has passed yet.
 
