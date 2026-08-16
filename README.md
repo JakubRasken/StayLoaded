@@ -53,6 +53,8 @@ See [Architecture](docs/ARCHITECTURE.md), [Roadmap](docs/ROADMAP.md), and [Launc
 
 The opt-in probe facility is documented in [Debug Probes](docs/DEBUG_PROBES.md). It exists only to validate NMS behavior on disposable test servers.
 
+The real-player path is documented in [Experimental Handoff](docs/EXPERIMENTAL_HANDOFF.md) and remains disabled because its crash and compatibility gates are incomplete.
+
 ## License
 
 StayLoaded is licensed under the [Apache License 2.0](LICENSE).

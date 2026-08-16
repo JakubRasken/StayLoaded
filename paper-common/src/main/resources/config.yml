@@ -1,2 +1,9 @@
 # Unsafe development facility. This does not hand off a real player's identity.
 debug-probes-enabled: false
+
+# Experimental: real-player inventory/state handoff is not production-ready.
+experimental-handoff:
+  enabled: false
+  allow-insecure-offline-mode: false
+  default-duration-seconds: 300
+  max-duration-seconds: 3600

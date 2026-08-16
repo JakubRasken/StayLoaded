@@ -3,22 +3,13 @@ package io.github.jakubrasken.stayloaded.core.persistence;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonParseException;
-import com.sun.jna.Library;
-import com.sun.jna.Native;
-import com.sun.jna.WString;
 import io.github.jakubrasken.stayloaded.core.session.SessionOutcome;
 import io.github.jakubrasken.stayloaded.core.session.SessionStatus;
 import io.github.jakubrasken.stayloaded.core.session.StayLoadedSession;
 import java.io.IOException;
-import java.nio.ByteBuffer;
-import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
-import java.nio.file.FileSystems;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
-import java.nio.file.StandardOpenOption;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -42,7 +33,7 @@ public final class JsonSessionStore {
     }
 
     public SessionLoadResult load() throws IOException {
-        Path temporaryFile = temporaryFile(dataFile);
+        Path temporaryFile = DurableFiles.temporaryFile(dataFile);
         List<Throwable> failures = new ArrayList<>();
 
         if (!Files.notExists(dataFile)) {
@@ -98,7 +89,7 @@ public final class JsonSessionStore {
         if (!Files.notExists(dataFile)) {
             try {
                 read(dataFile);
-                writeAtomically(backupFile, Files.readAllBytes(dataFile));
+                DurableFiles.writeAtomically(backupFile, Files.readAllBytes(dataFile));
             } catch (IOException | RuntimeException primaryFailure) {
                 if (Files.notExists(backupFile)) {
                     throw invalidStore("Refusing to replace an invalid primary without a valid backup", primaryFailure);
@@ -115,7 +106,7 @@ public final class JsonSessionStore {
                 }
             }
         }
-        writeAtomically(dataFile, content);
+        DurableFiles.writeAtomically(dataFile, content);
     }
 
     private List<StayLoadedSession> read(Path path) throws IOException {
@@ -134,76 +125,6 @@ public final class JsonSessionStore {
         } catch (JsonParseException | IllegalArgumentException | NullPointerException exception) {
             throw invalidStore("Invalid session document: " + path, exception);
         }
-    }
-
-    private void writeAtomically(Path target, byte[] content) throws IOException {
-        Path temporary = temporaryFile(target);
-        try (FileChannel channel = FileChannel.open(
-                temporary,
-                StandardOpenOption.CREATE,
-                StandardOpenOption.TRUNCATE_EXISTING,
-                StandardOpenOption.WRITE
-        )) {
-            ByteBuffer buffer = ByteBuffer.wrap(content);
-            while (buffer.hasRemaining()) {
-                channel.write(buffer);
-            }
-            channel.force(true);
-        }
-
-        if (isWindows()) {
-            moveWithWindowsWriteThrough(temporary, target);
-        } else {
-            try {
-                Files.move(
-                        temporary,
-                        target,
-                        StandardCopyOption.ATOMIC_MOVE,
-                        StandardCopyOption.REPLACE_EXISTING
-                );
-            } catch (AtomicMoveNotSupportedException exception) {
-                throw new IOException("Session store requires atomic moves: " + target, exception);
-            }
-            forceParentDirectory(target.getParent());
-        }
-    }
-
-    private static void forceParentDirectory(Path directory) throws IOException {
-        if (directory == null || !FileSystems.getDefault().supportedFileAttributeViews().contains("posix")) {
-            return;
-        }
-        try (FileChannel channel = FileChannel.open(directory, StandardOpenOption.READ)) {
-            channel.force(true);
-        }
-    }
-
-    private static boolean isWindows() {
-        return System.getProperty("os.name").startsWith("Windows");
-    }
-
-    private static void moveWithWindowsWriteThrough(Path source, Path target) throws IOException {
-        int flags = WindowsMove.MOVEFILE_REPLACE_EXISTING | WindowsMove.MOVEFILE_WRITE_THROUGH;
-        boolean moved = WindowsMove.INSTANCE.MoveFileExW(
-                new WString(source.toString()),
-                new WString(target.toString()),
-                flags
-        );
-        if (!moved) {
-            throw new IOException("MoveFileExW failed with Windows error " + Native.getLastError());
-        }
-    }
-
-    private interface WindowsMove extends Library {
-        WindowsMove INSTANCE = Native.load("kernel32", WindowsMove.class);
-        int MOVEFILE_REPLACE_EXISTING = 0x1;
-        int MOVEFILE_WRITE_THROUGH = 0x8;
-
-        @SuppressWarnings("checkstyle:MethodName")
-        boolean MoveFileExW(WString existingFileName, WString newFileName, int flags);
-    }
-
-    private static Path temporaryFile(Path target) {
-        return target.resolveSibling(target.getFileName() + ".tmp");
     }
 
     private static void ensureUniquePlayers(List<StayLoadedSession> sessions) {

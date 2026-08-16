@@ -27,6 +27,23 @@ class SessionMachineTest {
     }
 
     @Test
+    void canAbortAFailedReturnWithoutMovingTimeBackwards() {
+        StayLoadedSession active = SessionMachine.activate(
+                SessionMachine.create(
+                        UUID.randomUUID(), "Builder", START, Duration.ofHours(2), "Iron farm"
+                ),
+                START.plusSeconds(10)
+        );
+        StayLoadedSession returning = SessionMachine.beginReturn(active, START.plusSeconds(20));
+
+        StayLoadedSession restored = SessionMachine.abortReturn(returning, START.plusSeconds(15));
+
+        assertEquals(SessionStatus.ACTIVE, restored.status());
+        assertEquals(SessionOutcome.NONE, restored.outcome());
+        assertEquals(returning.updatedAt(), restored.updatedAt());
+    }
+
+    @Test
     void rejectsSkippedTransitionsAndMakesRetriesIdempotent() {
         StayLoadedSession starting = SessionMachine.create(
                 UUID.randomUUID(), "Builder", START, Duration.ofHours(2), ""

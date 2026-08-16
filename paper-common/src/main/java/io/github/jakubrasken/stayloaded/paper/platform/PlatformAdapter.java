@@ -1,8 +1,10 @@
 package io.github.jakubrasken.stayloaded.paper.platform;
 
+import java.io.IOException;
 import java.util.UUID;
 import org.bukkit.Location;
 import org.bukkit.Server;
+import org.bukkit.entity.Player;
 
 public interface PlatformAdapter extends AutoCloseable {
     String minecraftVersion();
@@ -16,6 +18,14 @@ public interface PlatformAdapter extends AutoCloseable {
     int probeCount();
 
     int removeAllProbes();
+
+    PlayerSnapshot snapshotPlayer(Player player);
+
+    void spawnStandIn(PlayerSnapshot snapshot) throws IOException;
+
+    void saveAndRemoveStandIn(UUID playerId) throws IOException;
+
+    boolean hasStandIn(UUID playerId);
 
     @Override
     default void close() {

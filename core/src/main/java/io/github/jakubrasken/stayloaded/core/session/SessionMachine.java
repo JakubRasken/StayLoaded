@@ -12,7 +12,7 @@ public final class SessionMachine {
     private static final Map<SessionStatus, Set<SessionStatus>> ALLOWED_TRANSITIONS = Map.of(
             SessionStatus.STARTING, EnumSet.of(SessionStatus.ACTIVE, SessionStatus.TERMINATED),
             SessionStatus.ACTIVE, EnumSet.of(SessionStatus.RETURNING, SessionStatus.EXPIRED, SessionStatus.TERMINATED),
-            SessionStatus.RETURNING, EnumSet.of(SessionStatus.TERMINATED),
+            SessionStatus.RETURNING, EnumSet.of(SessionStatus.ACTIVE, SessionStatus.TERMINATED),
             SessionStatus.EXPIRED, EnumSet.noneOf(SessionStatus.class),
             SessionStatus.TERMINATED, EnumSet.noneOf(SessionStatus.class)
     );
@@ -59,6 +59,10 @@ public final class SessionMachine {
 
     public static StayLoadedSession completeReturn(StayLoadedSession session, Instant now) {
         return transition(session, SessionStatus.TERMINATED, SessionOutcome.PLAYER_RETURNED, now);
+    }
+
+    public static StayLoadedSession abortReturn(StayLoadedSession session, Instant now) {
+        return transition(session, SessionStatus.ACTIVE, SessionOutcome.NONE, now);
     }
 
     public static StayLoadedSession expire(StayLoadedSession session, Instant now) {

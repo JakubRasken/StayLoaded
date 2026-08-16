@@ -7,11 +7,18 @@ website: https://github.com/JakubRasken/StayLoaded
 api-version: '1.21.11'
 folia-supported: false
 commands:
+  stayloaded:
+    description: Disconnects and leaves an experimental server-side stand-in.
+    usage: /<command> [30s|10m|1h] [reason]
+    permission: stayloaded.use
   stayloaded-debug:
     description: Manages development-only synthetic player probes.
     usage: /<command> probe <spawn [world x y z]|remove <uuid>|count|clear>
     permission: stayloaded.admin.debug
 permissions:
+  stayloaded.use:
+    description: Allows experimental StayLoaded player handoff.
+    default: op
   stayloaded.admin.debug:
     description: Allows unsafe StayLoaded development probes.
     default: op
