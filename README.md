@@ -55,6 +55,8 @@ The opt-in probe facility is documented in [Debug Probes](docs/DEBUG_PROBES.md).
 
 The real-player path is documented in [Experimental Handoff](docs/EXPERIMENTAL_HANDOFF.md) and remains disabled because its crash and compatibility gates are incomplete. Active stand-ins are checkpointed periodically, and orderly-restart restoration is available as an opt-in flag, but crash recovery and full lifecycle safety are not complete.
 
+Operators: see [Migration](docs/MIGRATION.md) and [Troubleshooting](docs/TROUBLESHOOTING.md).
+
 ## License
 
 StayLoaded is licensed under the [Apache License 2.0](LICENSE).

@@ -3,6 +3,7 @@ package io.github.jakubrasken.stayloaded.paper;
 import io.github.jakubrasken.stayloaded.paper.command.DebugProbeCommand;
 import io.github.jakubrasken.stayloaded.paper.command.StayLoadedCommand;
 import io.github.jakubrasken.stayloaded.paper.handoff.StayLoadedCoordinator;
+import io.github.jakubrasken.stayloaded.paper.message.Messages;
 import io.github.jakubrasken.stayloaded.paper.platform.PlatformAdapter;
 import java.io.IOException;
 import java.util.ServiceLoader;
@@ -27,14 +28,22 @@ public final class StayLoadedPlugin extends JavaPlugin {
         } catch (IOException exception) {
             throw new IllegalStateException("Could not initialize StayLoaded session storage", exception);
         }
+        Messages messages = new Messages(key -> {
+            String value = getConfig().getString("messages." + key);
+            return java.util.Optional.ofNullable(value);
+        });
         Objects.requireNonNull(getCommand("stayloaded-debug"), "stayloaded-debug command")
                 .setExecutor(new DebugProbeCommand(this, platformAdapter));
+        StayLoadedCommand stayLoadedCommand = new StayLoadedCommand(
+                coordinator,
+                messages,
+                getConfig().getLong("experimental-handoff.default-duration-seconds"),
+                getConfig().getLong("experimental-handoff.max-duration-seconds")
+        );
         Objects.requireNonNull(getCommand("stayloaded"), "stayloaded command")
-                .setExecutor(new StayLoadedCommand(
-                        coordinator,
-                        getConfig().getLong("experimental-handoff.default-duration-seconds"),
-                        getConfig().getLong("experimental-handoff.max-duration-seconds")
-                ));
+                .setExecutor(stayLoadedCommand);
+        Objects.requireNonNull(getCommand("stayloaded"), "stayloaded command tab")
+                .setTabCompleter(stayLoadedCommand);
         getLogger().info("StayLoaded initialized for Minecraft " + platformAdapter.minecraftVersion());
         getLogger().info("Player handoff is not enabled yet.");
         if (getConfig().getBoolean("debug-probes-enabled")) {

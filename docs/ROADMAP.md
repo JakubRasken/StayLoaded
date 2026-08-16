@@ -41,10 +41,10 @@ Every milestone is committed and pushed only after its checks pass.
 
 ## M6: Operator Experience
 
-- Add permissions, admin list/info/terminate/reload commands, and tab completion.
-- Add configurable MiniMessage output and optional broadcasts.
-- Add metrics with explicit disclosure and opt-out.
-- Publish migration and troubleshooting documentation.
+- [x] Add permissions, admin list/info/terminate/reload commands, and tab completion.
+- [x] Add configurable MiniMessage output and optional broadcasts.
+- [x] Add metrics with explicit disclosure and opt-out.
+- [x] Publish migration and troubleshooting documentation.
 
 ## M7: Public Beta
 

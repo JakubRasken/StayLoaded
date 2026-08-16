@@ -18,3 +18,44 @@ experimental-handoff:
   # How many times a stand-in may respawn (at its bed/anchor or world spawn)
   # after dying before its session is ended with the last checkpoint intact.
   max-stand-in-respawns: 3
+
+# Announce session start/end to every online player.
+broadcast-session-changes: false
+
+# Anonymous, aggregate operation metrics. No player names or UUIDs are
+# recorded. Stored in plugins/StayLoaded/metrics.json and viewable with
+# /stayloaded metrics. Disable to opt out entirely.
+metrics:
+  enabled: true
+
+# MiniMessage templates for operator output. Any key may be customized;
+# missing keys fall back to built-in defaults.
+messages:
+  session-started: "<green>Your StayLoaded stand-in is starting."
+  session-started-broadcast: "<yellow><player> left a StayLoaded stand-in (<duration>)."
+  session-ended-broadcast: "<yellow><player>'s StayLoaded stand-in ended (<reason>)."
+  duration-invalid: "<red>Duration must be between 1 second and <max> seconds."
+  duration-format: "<red>Use a duration such as 30s, 10m, or 1h."
+  start-failed: "<red>StayLoaded could not start safely: <error>"
+  terminate-usage: "<red>Usage: /stayloaded terminate <player>"
+  terminate-permission: "<red>You do not have permission to terminate StayLoaded sessions."
+  terminate-unknown-player: "<red>No player named '<player>' is online."
+  terminate-done: "<green>Terminated the StayLoaded session for <player>."
+  terminate-failed: "<red>StayLoaded could not terminate safely: <error>"
+  list-empty: "<gray>No active StayLoaded sessions."
+  list-header: "<yellow>StayLoaded sessions:"
+  list-entry: "<gray>- <white><player></gray> (<yellow><status></yellow>, <white><remaining></white> remaining)"
+  info-header: "<yellow>StayLoaded session for <player>:"
+  info-status: "<gray>Status: <white><status></gray>"
+  info-started: "<gray>Started: <white><started></gray>"
+  info-expires: "<gray>Expires: <white><expires></gray>"
+  info-note: "<gray>Note: <white><note></gray>"
+  info-respawns: "<gray>Respawns: <white><respawns></gray>"
+  info-none: "<gray>No StayLoaded session exists for <player>."
+  reload-done: "<green>StayLoaded configuration reloaded."
+  reload-failed: "<red>StayLoaded could not reload: <error>"
+  metrics-header: "<yellow>StayLoaded metrics:"
+  metrics-entry: "<gray>- <white><name></gray>: <yellow><count></yellow>"
+  metrics-empty: "<gray>No StayLoaded metrics recorded yet."
+  metrics-opt-out: "<gray>Metrics are disabled in config.yml."
+  metrics-failed: "<red>StayLoaded metrics could not be read: <error>"

@@ -1,5 +1,6 @@
 package io.github.jakubrasken.stayloaded.paper.handoff;
 
+import io.github.jakubrasken.stayloaded.core.metrics.MetricsRecorder;
 import io.github.jakubrasken.stayloaded.core.persistence.DurableFiles;
 import io.github.jakubrasken.stayloaded.core.persistence.JsonSessionStore;
 import io.github.jakubrasken.stayloaded.core.persistence.SessionLoadResult;
@@ -7,6 +8,7 @@ import io.github.jakubrasken.stayloaded.core.session.SessionMachine;
 import io.github.jakubrasken.stayloaded.core.session.SessionOutcome;
 import io.github.jakubrasken.stayloaded.core.session.SessionStatus;
 import io.github.jakubrasken.stayloaded.core.session.StayLoadedSession;
+import io.github.jakubrasken.stayloaded.paper.message.Messages;
 import io.github.jakubrasken.stayloaded.paper.platform.PlatformAdapter;
 import io.github.jakubrasken.stayloaded.paper.platform.PlayerSnapshot;
 import java.io.IOException;
@@ -16,12 +18,15 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.logging.Level;
 import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
+import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
@@ -40,12 +45,15 @@ public final class StayLoadedCoordinator implements Listener, AutoCloseable {
     private final PlatformAdapter platformAdapter;
     private final JsonSessionStore sessionStore;
     private final Path cleanShutdownMarker;
+    private final MetricsRecorder metricsRecorder;
+    private final Messages messages;
     private final Map<UUID, StayLoadedSession> sessions = new HashMap<>();
     private final Set<UUID> armedPlayers = new HashSet<>();
     private final Map<UUID, PlayerSnapshot> pendingSnapshots = new HashMap<>();
-    private final long checkpointIntervalTicks;
-    private final boolean restoreAfterRestart;
-    private final int maxStandInRespawns;
+    private long checkpointIntervalTicks;
+    private boolean restoreAfterRestart;
+    private int maxStandInRespawns;
+    private boolean broadcastSessionChanges;
     private long lastCheckpointTick;
     private boolean acceptingSessions = true;
 
@@ -54,24 +62,60 @@ public final class StayLoadedCoordinator implements Listener, AutoCloseable {
         this.platformAdapter = platformAdapter;
         this.sessionStore = new JsonSessionStore(plugin.getDataFolder().toPath().resolve("sessions.json"));
         this.cleanShutdownMarker = plugin.getDataFolder().toPath().resolve("shutdown-clean.marker");
-        this.restoreAfterRestart = plugin.getConfig().getBoolean(
+        this.metricsRecorder = new MetricsRecorder(plugin.getDataFolder().toPath().resolve("metrics.json"));
+        this.messages = new Messages(key -> {
+            String value = plugin.getConfig().getString("messages." + key);
+            return Optional.ofNullable(value);
+        });
+        reloadConfig();
+        loadAndReconcile();
+        Bukkit.getPluginManager().registerEvents(this, plugin);
+        Bukkit.getScheduler().runTaskTimer(plugin, this::tickSessions, 20L, 20L);
+    }
+
+    public void reloadConfig() {
+        FileConfiguration config = plugin.getConfig();
+        this.restoreAfterRestart = config.getBoolean(
                 "experimental-handoff.restore-after-restart",
                 false
         );
-        this.maxStandInRespawns = plugin.getConfig().getInt(
+        this.maxStandInRespawns = config.getInt(
                 "experimental-handoff.max-stand-in-respawns",
                 3
         );
-        long checkpointIntervalSeconds = plugin.getConfig().getLong(
+        long checkpointIntervalSeconds = config.getLong(
                 "experimental-handoff.checkpoint-interval-seconds",
                 60L
         );
         this.checkpointIntervalTicks = checkpointIntervalSeconds > 0
                 ? Math.max(20L, checkpointIntervalSeconds * 20L)
                 : 0L;
-        loadAndReconcile();
-        Bukkit.getPluginManager().registerEvents(this, plugin);
-        Bukkit.getScheduler().runTaskTimer(plugin, this::tickSessions, 20L, 20L);
+        this.broadcastSessionChanges = config.getBoolean("broadcast-session-changes", false);
+    }
+
+    public Messages.ConfigView messageConfig() {
+        return key -> {
+            String value = plugin.getConfig().getString("messages." + key);
+            return Optional.ofNullable(value);
+        };
+    }
+
+    public List<StayLoadedSession> sessionsSnapshot() {
+        requirePrimaryThread();
+        return List.copyOf(sessions.values());
+    }
+
+    public Optional<StayLoadedSession> sessionFor(UUID playerId) {
+        requirePrimaryThread();
+        return Optional.ofNullable(sessions.get(playerId));
+    }
+
+    public MetricsRecorder metrics() {
+        return metricsRecorder;
+    }
+
+    public boolean metricsEnabled() {
+        return plugin.getConfig().getBoolean("metrics.enabled", true);
     }
 
     public void start(Player player, Duration duration, String note) throws IOException {
@@ -105,6 +149,13 @@ public final class StayLoadedCoordinator implements Listener, AutoCloseable {
         persist(starting);
         armedPlayers.add(player.getUniqueId());
         player.kick(Component.text("Your StayLoaded stand-in is starting."));
+        metricsRecorder.record("session_started");
+        if (broadcastSessionChanges) {
+            Bukkit.broadcast(messages.render("session-started-broadcast", Map.of(
+                    "player", player.getName(),
+                    "duration", Messages.formatDuration(duration)
+            )));
+        }
 
         Bukkit.getScheduler().runTaskLater(plugin, () -> failCancelledKick(player.getUniqueId()), 10L);
     }
@@ -157,6 +208,8 @@ public final class StayLoadedCoordinator implements Listener, AutoCloseable {
         try {
             platformAdapter.removeStandIn(playerId);
             persist(SessionMachine.terminate(session, SessionOutcome.PLAYER_DIED, Instant.now()));
+            metricsRecorder.record("session_died");
+            broadcastSessionEnd(session.playerName(), "died");
             plugin.getLogger().warning(
                     "Stand-in for " + session.playerName() + " died past the respawn cap; "
                             + "ended its session with the last checkpoint intact"
@@ -167,6 +220,15 @@ public final class StayLoadedCoordinator implements Listener, AutoCloseable {
                     "Failed to safely end the session after the stand-in for " + session.playerName() + " died",
                     exception
             );
+        }
+    }
+
+    private void broadcastSessionEnd(String playerName, String reason) {
+        if (broadcastSessionChanges) {
+            Bukkit.broadcast(messages.render("session-ended-broadcast", Map.of(
+                    "player", playerName,
+                    "reason", reason
+            )));
         }
     }
 
@@ -252,6 +314,8 @@ public final class StayLoadedCoordinator implements Listener, AutoCloseable {
                         persistenceFailure
                 );
             }
+            metricsRecorder.record("player_returned");
+            broadcastSessionEnd(session.playerName(), "returned");
         } catch (IOException | RuntimeException exception) {
             StayLoadedSession current = sessions.get(playerId);
             if (current != null && current.status() == SessionStatus.RETURNING && platformAdapter.hasStandIn(playerId)) {
@@ -283,6 +347,8 @@ public final class StayLoadedCoordinator implements Listener, AutoCloseable {
             acceptingSessions = false;
             throw persistenceFailure;
         }
+        metricsRecorder.record("admin_terminated");
+        broadcastSessionEnd(session.playerName(), "terminated by an operator");
     }
 
     private void activateStandIn(UUID playerId) {
@@ -408,6 +474,8 @@ public final class StayLoadedCoordinator implements Listener, AutoCloseable {
                             persistenceFailure
                     );
                 }
+                metricsRecorder.record("session_expired");
+                broadcastSessionEnd(session.playerName(), "expired");
             } catch (IOException | RuntimeException exception) {
                 plugin.getLogger().log(Level.SEVERE, "Failed to expire stand-in " + session.playerId(), exception);
             }
@@ -418,6 +486,8 @@ public final class StayLoadedCoordinator implements Listener, AutoCloseable {
         try {
             platformAdapter.removeStandIn(session.playerId());
             persist(SessionMachine.terminate(session, SessionOutcome.PLAYER_DIED, now));
+            metricsRecorder.record("session_died");
+            broadcastSessionEnd(session.playerName(), "died");
             plugin.getLogger().warning(
                     "Stand-in for " + session.playerName() + " was found dead; "
                             + "ended its session with the last checkpoint intact"
