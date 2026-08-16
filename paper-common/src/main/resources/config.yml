@@ -11,3 +11,7 @@ experimental-handoff:
   # 0 disables periodic checkpointing. Lower values narrow the crash window
   # but increase disk writes per stand-in.
   checkpoint-interval-seconds: 60
+  # Whether an orderly server restart keeps active stand-ins alive. On a
+  # crash (no clean shutdown), sessions are terminated instead and their
+  # last checkpoint is left as the authoritative player data.
+  restore-after-restart: false

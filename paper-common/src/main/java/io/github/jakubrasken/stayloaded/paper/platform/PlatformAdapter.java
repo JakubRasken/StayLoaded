@@ -27,6 +27,8 @@ public interface PlatformAdapter extends AutoCloseable {
 
     void checkpointStandIn(UUID playerId) throws IOException;
 
+    void restoreStandIn(UUID playerId, String playerName) throws IOException;
+
     boolean hasStandIn(UUID playerId);
 
     @Override

@@ -227,6 +227,37 @@ public final class Paper12111Adapter implements PlatformAdapter {
         writeStandInData(standIn.player(), playerId);
     }
 
+    @Override
+    public void restoreStandIn(UUID playerId, String playerName) throws IOException {
+        requirePrimaryThread();
+        requireInitialized();
+        if (server.getPlayerList().getPlayer(playerId) != null) {
+            throw new IllegalStateException("Cannot restore a stand-in while the real player is registered");
+        }
+        if (standIns.containsKey(playerId)) {
+            throw new IllegalStateException("A stand-in already exists for " + playerId);
+        }
+        for (ServerLevel level : server.getAllLevels()) {
+            if (level.getEntities().get(playerId) != null) {
+                throw new IllegalStateException("An entity already owns player UUID " + playerId);
+            }
+        }
+
+        CompoundTag authoritativeData = readPlayerData(playerId);
+        ServerLevel level = server.overworld();
+        SyntheticPlayer standIn = createSyntheticPlayer(
+                level,
+                new GameProfile(playerId, playerName),
+                ClientInformation.createDefault(),
+                player -> player.load(TagValueInput.create(
+                        ProblemReporter.DISCARDING,
+                        server.registryAccess(),
+                        authoritativeData
+                ))
+        );
+        standIns.put(playerId, standIn);
+    }
+
     private void writeStandInData(ServerPlayer standIn, UUID playerId) throws IOException {
         CompoundTag savedData = savePlayerData(standIn);
         ByteArrayOutputStream compressedOutput = new ByteArrayOutputStream();

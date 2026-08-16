@@ -1,5 +1,6 @@
 package io.github.jakubrasken.stayloaded.paper.handoff;
 
+import io.github.jakubrasken.stayloaded.core.persistence.DurableFiles;
 import io.github.jakubrasken.stayloaded.core.persistence.JsonSessionStore;
 import io.github.jakubrasken.stayloaded.core.persistence.SessionLoadResult;
 import io.github.jakubrasken.stayloaded.core.session.SessionMachine;
@@ -9,6 +10,8 @@ import io.github.jakubrasken.stayloaded.core.session.StayLoadedSession;
 import io.github.jakubrasken.stayloaded.paper.platform.PlatformAdapter;
 import io.github.jakubrasken.stayloaded.paper.platform.PlayerSnapshot;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.HashMap;
@@ -31,10 +34,12 @@ public final class StayLoadedCoordinator implements Listener, AutoCloseable {
     private final JavaPlugin plugin;
     private final PlatformAdapter platformAdapter;
     private final JsonSessionStore sessionStore;
+    private final Path cleanShutdownMarker;
     private final Map<UUID, StayLoadedSession> sessions = new HashMap<>();
     private final Set<UUID> armedPlayers = new HashSet<>();
     private final Map<UUID, PlayerSnapshot> pendingSnapshots = new HashMap<>();
     private final long checkpointIntervalTicks;
+    private final boolean restoreAfterRestart;
     private long lastCheckpointTick;
     private boolean acceptingSessions = true;
 
@@ -42,6 +47,11 @@ public final class StayLoadedCoordinator implements Listener, AutoCloseable {
         this.plugin = plugin;
         this.platformAdapter = platformAdapter;
         this.sessionStore = new JsonSessionStore(plugin.getDataFolder().toPath().resolve("sessions.json"));
+        this.cleanShutdownMarker = plugin.getDataFolder().toPath().resolve("shutdown-clean.marker");
+        this.restoreAfterRestart = plugin.getConfig().getBoolean(
+                "experimental-handoff.restore-after-restart",
+                false
+        );
         long checkpointIntervalSeconds = plugin.getConfig().getLong(
                 "experimental-handoff.checkpoint-interval-seconds",
                 60L
@@ -282,10 +292,32 @@ public final class StayLoadedCoordinator implements Listener, AutoCloseable {
     private void loadAndReconcile() throws IOException {
         SessionLoadResult loaded = sessionStore.load();
         Instant now = Instant.now();
+        boolean cleanShutdown = Files.notExists(cleanShutdownMarker);
+        if (cleanShutdown) {
+            Files.deleteIfExists(cleanShutdownMarker);
+        }
         for (StayLoadedSession session : loaded.sessions()) {
             StayLoadedSession reconciled = session;
             if (!session.isTerminal()) {
-                if (session.status() == SessionStatus.ACTIVE && session.remainingAt(now).isZero()) {
+                if (cleanShutdown) {
+                    reconciled = SessionMachine.terminate(session, SessionOutcome.RECOVERY_FAILED, now);
+                } else if (restoreAfterRestart
+                        && session.status() == SessionStatus.ACTIVE
+                        && session.checkpointedAt() != null
+                        && !session.remainingAt(now).isZero()) {
+                    try {
+                        platformAdapter.restoreStandIn(session.playerId(), session.playerName());
+                        reconciled = SessionMachine.activate(session, session.updatedAt());
+                        plugin.getLogger().info("Restored StayLoaded stand-in for " + session.playerName());
+                    } catch (IOException | RuntimeException exception) {
+                        plugin.getLogger().log(
+                                Level.SEVERE,
+                                "Failed to restore stand-in for " + session.playerName(),
+                                exception
+                        );
+                        reconciled = SessionMachine.terminate(session, SessionOutcome.RECOVERY_FAILED, now);
+                    }
+                } else if (session.status() == SessionStatus.ACTIVE && session.remainingAt(now).isZero()) {
                     reconciled = SessionMachine.expire(session, now);
                 } else {
                     reconciled = SessionMachine.terminate(session, SessionOutcome.RECOVERY_FAILED, now);
@@ -332,15 +364,38 @@ public final class StayLoadedCoordinator implements Listener, AutoCloseable {
                 }
             }
         }
+
+        boolean allSaved = true;
         for (StayLoadedSession session : Set.copyOf(sessions.values())) {
             if (session.status() != SessionStatus.ACTIVE || !platformAdapter.hasStandIn(session.playerId())) {
                 continue;
             }
             try {
-                platformAdapter.saveAndRemoveStandIn(session.playerId());
-                persist(SessionMachine.terminate(session, SessionOutcome.PLUGIN_DISABLED, Instant.now()));
+                platformAdapter.checkpointStandIn(session.playerId());
+                StayLoadedSession checkpointed = SessionMachine.checkpoint(session, Instant.now());
+                try {
+                    persist(checkpointed);
+                } catch (IOException persistenceFailure) {
+                    sessions.put(session.playerId(), checkpointed);
+                    allSaved = false;
+                    plugin.getLogger().log(
+                            Level.SEVERE,
+                            "Stand-in data is safe, but the final checkpoint could not be persisted for "
+                                    + session.playerId(),
+                            persistenceFailure
+                    );
+                }
             } catch (IOException | RuntimeException exception) {
-                plugin.getLogger().log(Level.SEVERE, "Failed to close stand-in " + session.playerId(), exception);
+                allSaved = false;
+                plugin.getLogger().log(Level.SEVERE, "Failed to checkpoint stand-in " + session.playerId(), exception);
+            }
+        }
+
+        if (allSaved) {
+            try {
+                DurableFiles.writeAtomically(cleanShutdownMarker, new byte[0]);
+            } catch (IOException exception) {
+                plugin.getLogger().log(Level.SEVERE, "Failed to record a clean shutdown", exception);
             }
         }
     }

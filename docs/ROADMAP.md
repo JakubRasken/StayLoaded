@@ -33,10 +33,10 @@ Every milestone is committed and pushed only after its checks pass.
 
 ## M5: Lifecycle Hardening
 
-- Handle timeout, damage, death, respawn, dimensions, vehicles, and pearls.
-- Restore sessions after orderly restart.
-- Recover or fail closed after interrupted writes and crashes.
-- Add configurable safety policies and admin termination.
+- [x] Restore sessions after orderly restart (opt-in `restore-after-restart`; checkpointed stand-ins are re-spawned from their `.dat`, clean shutdowns leave nothing to restore).
+- [ ] Handle timeout, damage, death, respawn, dimensions, vehicles, and pearls.
+- [ ] Recover or fail closed after interrupted writes and crashes.
+- [ ] Add configurable safety policies and admin termination.
 
 ## M6: Operator Experience
 
