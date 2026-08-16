@@ -44,6 +44,26 @@ class SessionMachineTest {
     }
 
     @Test
+    void respawnIncrementsCountWithoutChangingStatus() {
+        StayLoadedSession active = SessionMachine.activate(
+                SessionMachine.create(
+                        UUID.randomUUID(), "Builder", START, Duration.ofHours(2), "Iron farm"
+                ),
+                START.plusSeconds(10)
+        );
+
+        StayLoadedSession respawned = SessionMachine.respawn(active, START.plusSeconds(30));
+
+        assertEquals(SessionStatus.ACTIVE, respawned.status());
+        assertEquals(1, respawned.respawnCount());
+        assertEquals(active.revision() + 1, respawned.revision());
+        assertThrows(
+                IllegalStateException.class,
+                () -> SessionMachine.respawn(SessionMachine.beginReturn(active, START.plusSeconds(31)), START.plusSeconds(32))
+        );
+    }
+
+    @Test
     void checkpointKeepsStatusAndRecordsCheckpointedAt() {
         StayLoadedSession active = SessionMachine.activate(
                 SessionMachine.create(

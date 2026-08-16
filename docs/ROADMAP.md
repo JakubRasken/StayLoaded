@@ -34,10 +34,10 @@ Every milestone is committed and pushed only after its checks pass.
 ## M5: Lifecycle Hardening
 
 - [x] Restore sessions after orderly restart (opt-in `restore-after-restart`; checkpointed stand-ins are re-spawned from their `.dat`, clean shutdowns leave nothing to restore).
-- [x] Handle death (stand-ins are removed without saving and the session ends `PLAYER_DIED`, keeping the last checkpoint authoritative).
+- [x] Handle death (stand-ins respawn at their bed/anchor up to `max-stand-in-respawns` times; past the cap they are removed without saving and the session ends `PLAYER_DIED`, keeping the last checkpoint authoritative).
+- [x] Handle respawn, dimensions (restored stand-ins go to their recorded `Dimension`), portals, and pearls (portal/pearl teleports and mounts are cancelled for stand-ins).
 - [x] Add configurable safety policies and admin termination (`/stayloaded terminate <player>`, `stayloaded.terminate` permission).
-- [ ] Handle respawn, dimensions, portals, vehicles, and pearls.
-- [ ] Recover or fail closed after interrupted writes and crashes.
+- [x] Recover or fail closed after interrupted writes and crashes (atomic temp-file writes with validated `.dat_old`; `DurableFilesTest` covers crash-mid-write and temp-file recovery).
 
 ## M6: Operator Experience
 

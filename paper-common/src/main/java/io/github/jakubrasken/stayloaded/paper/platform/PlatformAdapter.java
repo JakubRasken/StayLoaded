@@ -31,6 +31,10 @@ public interface PlatformAdapter extends AutoCloseable {
 
     void removeStandIn(UUID playerId) throws IOException;
 
+    void respawnStandIn(UUID playerId) throws IOException;
+
+    boolean isStandInAlive(UUID playerId);
+
     boolean hasStandIn(UUID playerId);
 
     @Override

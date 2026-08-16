@@ -15,7 +15,8 @@ public record StayLoadedSession(
         SessionStatus status,
         String note,
         SessionOutcome outcome,
-        Instant checkpointedAt
+        Instant checkpointedAt,
+        int respawnCount
 ) {
     public StayLoadedSession {
         Objects.requireNonNull(playerId, "playerId");
@@ -41,6 +42,9 @@ public record StayLoadedSession(
         }
         if (revision < 0) {
             throw new IllegalArgumentException("revision must not be negative");
+        }
+        if (respawnCount < 0) {
+            throw new IllegalArgumentException("respawnCount must not be negative");
         }
 
         if (status == SessionStatus.EXPIRED && outcome != SessionOutcome.TIMEOUT) {

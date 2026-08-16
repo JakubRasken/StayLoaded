@@ -25,6 +25,10 @@ import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.PacketFlow;
 import net.minecraft.network.protocol.game.GameProtocols;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.world.level.Level;
 import net.minecraft.server.dedicated.DedicatedServer;
 import net.minecraft.server.level.ClientInformation;
 import net.minecraft.server.level.ServerLevel;
@@ -33,8 +37,10 @@ import net.minecraft.server.network.CommonListenerCookie;
 import net.minecraft.server.network.ServerGamePacketListenerImpl;
 import net.minecraft.util.ProblemReporter;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.level.portal.TeleportTransition;
 import net.minecraft.world.level.storage.TagValueInput;
 import net.minecraft.world.level.storage.TagValueOutput;
+import org.bukkit.event.player.PlayerRespawnEvent.RespawnReason;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Server;
@@ -249,7 +255,7 @@ public final class Paper262Adapter implements PlatformAdapter {
         SyntheticPlayer standIn = createSyntheticPlayer(
                 new GameProfile(playerId, playerName),
                 ClientInformation.createDefault(),
-                server.overworld(),
+                resolveRestoreLevel(authoritativeData),
                 player -> player.load(TagValueInput.create(
                         ProblemReporter.DISCARDING,
                         server.registryAccess(),
@@ -258,6 +264,20 @@ public final class Paper262Adapter implements PlatformAdapter {
                 "Failed to initialize the restored stand-in channel"
         );
         standIns.put(playerId, standIn);
+    }
+
+    private ServerLevel resolveRestoreLevel(CompoundTag playerData) {
+        if (playerData.contains("Dimension")) {
+            String dimension = playerData.getString("Dimension").orElse("");
+            if (!dimension.isBlank()) {
+                ResourceKey<Level> key = ResourceKey.create(Registries.DIMENSION, Identifier.parse(dimension));
+                ServerLevel level = server.getLevel(key);
+                if (level != null) {
+                    return level;
+                }
+            }
+        }
+        return server.overworld();
     }
 
     @Override
@@ -305,6 +325,37 @@ public final class Paper262Adapter implements PlatformAdapter {
             }
             throw exception;
         }
+    }
+
+    @Override
+    public void respawnStandIn(UUID playerId) throws IOException {
+        requirePrimaryThread();
+        requireInitialized();
+        SyntheticPlayer standIn = standIns.get(playerId);
+        if (standIn == null) {
+            throw new IllegalStateException("No stand-in exists for " + playerId);
+        }
+        if (server.getPlayerList().getPlayer(playerId) != null) {
+            throw new IllegalStateException("Cannot respawn a stand-in while the real player is registered");
+        }
+
+        ServerPlayer player = standIn.player();
+        TeleportTransition transition = player.findRespawnPositionAndUseSpawnBlock(
+                false,
+                TeleportTransition.DO_NOTHING,
+                RespawnReason.PLUGIN
+        );
+        player.teleport(transition);
+        player.setHealth(player.getMaxHealth());
+        player.getFoodData().setFoodLevel(20);
+        player.getFoodData().setSaturation(5.0F);
+    }
+
+    @Override
+    public boolean isStandInAlive(UUID playerId) {
+        requirePrimaryThread();
+        SyntheticPlayer standIn = standIns.get(playerId);
+        return standIn != null && !standIn.player().isRemoved() && !standIn.player().isDeadOrDying();
     }
 
     @Override

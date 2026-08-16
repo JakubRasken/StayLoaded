@@ -41,7 +41,8 @@ public final class SessionMachine {
                 SessionStatus.STARTING,
                 note,
                 SessionOutcome.NONE,
-                null
+                null,
+                0
         );
     }
 
@@ -95,7 +96,30 @@ public final class SessionMachine {
                 session.status(),
                 session.note(),
                 session.outcome(),
-                checkpointTime
+                checkpointTime,
+                session.respawnCount()
+        );
+    }
+
+    public static StayLoadedSession respawn(StayLoadedSession session, Instant now) {
+        Objects.requireNonNull(session, "session");
+        Objects.requireNonNull(now, "now");
+        if (session.status() != SessionStatus.ACTIVE) {
+            throw new IllegalStateException("Only active sessions can be respawned");
+        }
+        Instant respawnTime = now.isBefore(session.updatedAt()) ? session.updatedAt() : now;
+        return new StayLoadedSession(
+                session.playerId(),
+                session.playerName(),
+                session.startedAt(),
+                session.expiresAt(),
+                respawnTime,
+                session.revision() + 1,
+                session.status(),
+                session.note(),
+                session.outcome(),
+                session.checkpointedAt(),
+                session.respawnCount() + 1
         );
     }
 
@@ -143,7 +167,8 @@ public final class SessionMachine {
                 target,
                 session.note(),
                 outcome,
-                session.checkpointedAt()
+                session.checkpointedAt(),
+                session.respawnCount()
         );
     }
 }

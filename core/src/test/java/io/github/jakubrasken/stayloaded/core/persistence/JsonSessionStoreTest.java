@@ -134,6 +134,18 @@ class JsonSessionStoreTest {
         assertEquals(null, result.sessions().get(0).checkpointedAt());
     }
 
+    @Test
+    void roundTripsRespawnCount() throws IOException {
+        JsonSessionStore store = store();
+        StayLoadedSession active = session("00000000-0000-0000-0000-000000000001", "Builder");
+        StayLoadedSession respawned = SessionMachine.respawn(active, START.plusSeconds(30));
+
+        store.save(List.of(respawned));
+        SessionLoadResult result = store.load();
+
+        assertEquals(List.of(respawned), result.sessions());
+    }
+
     private JsonSessionStore store() {
         return new JsonSessionStore(dataFile());
     }

@@ -42,7 +42,8 @@ class StayLoadedSessionTest {
                 SessionStatus.STARTING,
                 "",
                 SessionOutcome.NONE,
-                null
+                null,
+                0
         ));
     }
 
@@ -57,7 +58,8 @@ class StayLoadedSessionTest {
                 status,
                 "Testing",
                 SessionOutcome.NONE,
-                null
+                null,
+                0
         );
     }
 
