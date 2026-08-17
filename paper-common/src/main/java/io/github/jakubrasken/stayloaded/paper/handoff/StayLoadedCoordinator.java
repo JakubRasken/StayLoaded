@@ -438,6 +438,7 @@ public final class StayLoadedCoordinator implements Listener, AutoCloseable {
 
     private void tickSessions() {
         expireSessions();
+        saveMetricsPeriodically();
         if (checkpointIntervalTicks == 0L) {
             return;
         }
@@ -447,6 +448,21 @@ public final class StayLoadedCoordinator implements Listener, AutoCloseable {
         }
         lastCheckpointTick = currentTick;
         checkpointSessions();
+    }
+
+    private long lastMetricsSaveTick;
+
+    private void saveMetricsPeriodically() {
+        long currentTick = Bukkit.getCurrentTick();
+        if (currentTick - lastMetricsSaveTick < 20L * 60L) {
+            return;
+        }
+        lastMetricsSaveTick = currentTick;
+        try {
+            metricsRecorder.save();
+        } catch (IOException exception) {
+            plugin.getLogger().log(Level.WARNING, "Failed to persist StayLoaded metrics", exception);
+        }
     }
 
     private void checkpointSessions() {
@@ -646,6 +662,11 @@ public final class StayLoadedCoordinator implements Listener, AutoCloseable {
             } catch (IOException exception) {
                 plugin.getLogger().log(Level.SEVERE, "Failed to record a clean shutdown", exception);
             }
+        }
+        try {
+            metricsRecorder.save();
+        } catch (IOException exception) {
+            plugin.getLogger().log(Level.WARNING, "Failed to persist StayLoaded metrics on shutdown", exception);
         }
     }
 

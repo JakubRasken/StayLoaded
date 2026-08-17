@@ -13,7 +13,18 @@ experimental-handoff:
   max-stand-in-respawns: 3
 ```
 
-When enabled, `/stayloaded [duration] [reason]` disconnects the player, waits for Paper's authoritative quit save, then loads that player data into a world-only synthetic `ServerPlayer`. A synchronous pre-login listener writes and verifies the stand-in's NBT before Paper reads the returning player's file. An operator with `stayloaded.terminate` can end a session early with `/stayloaded terminate <player>`; that saves the stand-in's current data and marks the session `ADMIN_TERMINATED`.
+When enabled, `/stayloaded [duration] [reason]` (alias `/sl`) disconnects the player, waits for Paper's authoritative quit save, then loads that player data into a world-only synthetic `ServerPlayer`. A synchronous pre-login listener writes and verifies the stand-in's NBT before Paper reads the returning player's file. The stand-in is inserted through the same `ServerLevel.addNewPlayer` path as a real player, so it holds the same chunk-loading behavior.
+
+Commands (see `/sl help` in game):
+
+- `/sl [duration] [reason]` or `/sl start [duration] [reason]` — start a session
+- `/sl status` — your own session's remaining time, expiry, and note
+- `/sl stop` — end your own session early
+- `/sl stop <player>` — end another player's session (needs `stayloaded.terminate`); saves the stand-in's current data and marks it `ADMIN_TERMINATED`
+- `/sl stopall` — end every live session at once (needs `stayloaded.terminate`)
+- `/sl list`, `/sl status <player>` — operator session overview (needs `stayloaded.admin.list`)
+- `/sl reload` — re-read config.yml (needs `stayloaded.admin.reload`)
+- `/sl metrics` — anonymous aggregate counters (needs `stayloaded.admin.metrics`)
 
 ## Current Safety Work
 

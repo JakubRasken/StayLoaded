@@ -45,7 +45,11 @@ public final class StayLoadedPlugin extends JavaPlugin {
         Objects.requireNonNull(getCommand("stayloaded"), "stayloaded command tab")
                 .setTabCompleter(stayLoadedCommand);
         getLogger().info("StayLoaded initialized for Minecraft " + platformAdapter.minecraftVersion());
-        getLogger().info("Player handoff is not enabled yet.");
+        if (getConfig().getBoolean("experimental-handoff.enabled")) {
+            getLogger().warning("Player handoff is ENABLED. Use only on disposable test servers.");
+        } else {
+            getLogger().info("Player handoff is disabled (experimental-handoff.enabled: false).");
+        }
         if (getConfig().getBoolean("debug-probes-enabled")) {
             getLogger().warning("Synthetic debug probes are enabled. Use only on a disposable test server.");
         }
